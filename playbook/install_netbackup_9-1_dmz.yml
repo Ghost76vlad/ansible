@@ -1,0 +1,113 @@
+---
+- name: Установка NetBackup-9.1 в DMZ/DCN
+  hosts: all
+  become: yes
+  gather_facts: no
+  vars:
+       continue_installation: "y"  # Продолжить установку
+       path_scripts: "/tmp/netbackup/"
+       server_name: "nbserv1.vimpelcom.ru"  # Имя главного сервера NetBackup
+       token: "MJCEDTKLYFWYLLPB"  # Токен для главного сервера
+       option: "2"  # Опция для Java GUI и JRE
+       secondary_server: "nbserv2.vimpelcom.ru"  # Имя вторичного сервера
+       secondary_token: "MRFZGPCGSFKJCVZZ"  # Токен для вторичного сервера
+       external_file: "./file/bp.conf_9.1"
+
+  tasks:
+    - name: Проверка установленной версии NetBackup
+      ansible.builtin.stat:
+        path: "/usr/openv/netbackup/bin/version"
+      register: version_check
+
+    - name: Пропустить установку, если NetBackup уже установлен
+      ansible.builtin.debug:
+        msg: "NetBackup уже установлен. Пропускаем дальнейшие действия."
+      when: version_check.stat.exists
+
+    - name: Копируем папку на удаленный хост
+      when: not version_check.stat.exists  # Выполнить только если NetBackup не установлен
+      copy:
+        src: /net/beesmc.vimpelcom.ru/store/soft/veritas/netbackup/nb91/NetBackup_9.1.0.1_CLIENTS2/
+        dest: "{{path_scripts}}"
+        directory_mode: yes
+        mode: '0755'
+
+    - name: Проверка доступности установщика
+      ansible.builtin.stat:
+        path: "{{path_scripts}}/install"
+      register: installer_stat
+      when: not version_check.stat.exists  # Проверка только если NetBackup не установлен
+
+    - name: Установка NB-clienta
+      # Изменение: добавлена проверка на определение installer_stat
+     #when: installer_stat is defined and installer_stat.stat.exists and not version_check.stat.exists
+      when:
+        - installer_stat is defined
+        - 'installer_stat.stat is defined'  # Проверка на существование атрибута stat
+        - installer_stat.stat.exists
+        - not version_check.stat.exists  # Проверка только если NetBackup не установлен
+
+      ansible.builtin.expect:
+        command: "{{path_scripts}}/install"
+        responses:
+          ".*Do you wish to continue?.*": "{{continue_installation}}\n"  # Продолжить установку?
+          ".*Do you want to install the NetBackup client software for this client?.*": "{{continue_installation}}\n"  # Установить клиентское ПО NetBackup?
+          ".*Enter the name of the NetBackup master server.*": "{{server_name}}\n"  # Введите имя главного сервера NetBackup
+          ".*Would you like to use.*": "{{continue_installation}}\n"  # Хотите использовать?
+          ".*Is this correct?.*": "{{continue_installation}}\n"  # Это правильно?
+          ".*Enter the authorization token for nbserv1.vimpelcom.ru or q to skip:.*": "{{token}}\n"  # Введите токен авторизации для nbserv1.vimpelcom.ru или q для пропуска
+          ".*You have used 1 of 3 attempts.*": "{{continue_installation}}\n"  # Вы использовали 1 из 3 попыток
+          ".*Java GUI and JRE option:.*": "{{option}}\n"  # Опция для Java GUI и JRE
+        timeout: 300
+      register: installation_result
+
+    - name: Проверка результата установки
+      ansible.builtin.debug:
+        var: installation_result
+      when: not version_check.stat.exists  # Проверка только если NetBackup не установлен
+      no_log: true  # Скрыть вывод
+
+    - name: Установка CA для nbserv2
+      when:
+        - installation_result is succeeded
+        - not version_check.stat.exists  # Пропустить установку CA, если NetBackup уже установлен
+      ansible.builtin.expect:
+        command: "/usr/openv/netbackup/bin/nbcertcmd -getCACertificate -server {{secondary_server}}"
+        responses:
+          ".*Are you sure you want to continue using this certificate?.*": "{{continue_installation}}\n"  # Вы уверены, что хотите продолжить использовать этот сертификат?
+        timeout: 60
+      register: token_install_result
+
+    - name: Установка токена для nbserv2
+      when:
+        - installation_result is succeeded
+        - not version_check.stat.exists  # Пропустить установку Токена, если NetBackup уже установлен
+      ansible.builtin.command: "/usr/openv/netbackup/bin/nbcertcmd -getCertificate -server {{ secondary_server }} -token {{ secondary_token }} -force"
+      register: token_install
+
+    - name: Stop NetBackup
+      when:
+        - installation_result is succeeded
+        - not version_check.stat.exists
+      ansible.builtin.command: "/usr/openv/netbackup/bin/goodies/netbackup stop"
+      register: netbackup_stoped
+
+    - name: Добавляем записи из внешнего файла в bp.conf
+      when: not version_check.stat.exists  # Выполнить только если NetBackup не установлен
+      ansible.builtin.lineinfile:
+        path: /usr/openv/netbackup/bp.conf
+        line: "{{ item }}"
+        insertafter: '^SERVER'  # Вставить после строки, начинающейся со слова SERVER
+      with_file: "{{ external_file }}"  # Путь к внешнему файлу с записями
+      no_log: true  # Скрыть вывод добавляемых записей
+
+    - name: Start NetBackup
+      when: not version_check.stat.exists
+      ansible.builtin.command: "/usr/openv/netbackup/bin/goodies/netbackup start"
+      register: netbackup_started
+      
+    - name: Удаление временного каталога {{path_scripts}} 
+      when: not version_check.stat.exists
+      ansible.builtin.file:
+        path: "{{path_scripts}}"
+        state: absent

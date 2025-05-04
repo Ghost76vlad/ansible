@@ -1,0 +1,34 @@
+---
+- name: Manually install password
+  hosts: all
+  become: yes
+  vars:
+    tuz_name: sys-test
+    tuz_comment: TT555
+    tuz_passwd: "wjzDqdfzg21BtX8EBp7Uj9"  # Укажите временный пароль здесь
+
+  tasks:
+
+    - name: Check if user exists
+      getent:
+        database: passwd
+        key: "{{ tuz_name }}"
+      register: user_check
+      ignore_errors: yes  # Игнорируем ошибку, если пользователь не найден
+
+    - name: Skip tasks if user exists
+      meta: end_play
+      when: not user_check.failed  # Если команда getent не завершилась с ошибкой, пользователь существует
+
+    - name: Add user {{ tuz_name }}
+      user:
+        name: "{{ tuz_name }}"
+        home: "/export/home/{{ tuz_name }}"
+        password: "{{ tuz_passwd | password_hash('sha512') }}"  # Хешируем пароль
+        comment: "{{ tuz_comment }}"
+        shell: /bin/bash
+        state: present
+        update_password: on_create  # Устанавливаем пароль только при создании пользователя
+
+    - name: Force password change on first login
+      command: "chage -d 0 {{ tuz_name }}"

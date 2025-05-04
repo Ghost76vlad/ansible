@@ -1,0 +1,43 @@
+---
+- name: Auto install password
+  hosts: all
+  become: yes
+  vars:
+    tuz_name: vlados
+    tuz_comment: TT555
+
+  tasks:
+
+    - name: Check if user exists
+      getent:
+        database: passwd
+        key: "{{ tuz_name }}"
+      register: user_check
+      ignore_errors: yes  # Игнорируем ошибку, если пользователь не найден
+
+    - name: Skip tasks if user exists
+      meta: end_play
+      when: not user_check.failed  # Если команда getent не завершилась с ошибкой, пользователь существует
+
+    - name: Generate random temporary password
+      ansible.builtin.shell: |
+        tr -dc A-Za-z0-9 </dev/urandom | head -c 22
+      register: random_password
+      changed_when: false
+
+    - name: Add user {{ tuz_name }}
+      user:
+        name: "{{ tuz_name }}"
+        home: "/export/home/{{ tuz_name }}"
+        password: "{{ random_password.stdout | password_hash('sha512') }}"  # Хешируем пароль
+        comment: "{{ tuz_comment }}"
+        shell: /bin/bash
+        state: present
+        update_password: on_create  # Устанавливаем пароль
+
+
+    - name: Force password change on first login
+      command: "chage -d 0 {{ tuz_name }}"
+
+    - name: Show generated password {{ tuz_name }}
+      ansible.builtin.debug:

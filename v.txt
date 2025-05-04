@@ -1,0 +1,1 @@
+. /opt/ansible/venv_ansible-core-2.11.12/bin/activate

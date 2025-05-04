@@ -1,0 +1,48 @@
+---
+- name: playbook SWAP 4GB
+  hosts: webservers
+  become: true
+  tasks:
+   - name: create partition
+     parted:
+     device: /dev/vdb
+     number: 1
+     flags: [ lvm ]
+     state: present
+     part_end: 5GB
+ 
+   - name: task for creating volume group
+     lvg:
+         vg: sample-vg
+         pvs: /dev/vdb1
+         pesize: 4
+ 
+   - name: task for creating logical volume
+     lvol:
+         vg: sample-vg
+         lv: swap-lv
+     size: 4g
+     force: yes
+ 
+   - name: SWAP OFF and clear string mounte SWAP in fstab
+     command: swapoff -a
+     command: sed -i '/swap/d' /etc/fstab
+ 
+   - name: format the SWAP filesystem
+     filesystem:
+        fstype: swap
+        dev: /dev/sample-vg/swap-lv
+ 
+   - name: write swap entry in fstab
+     mount:
+           name=none
+           src=/dev/sample-vg/swap-lv
+           fstype=swap
+           opts=sw
+           passno=0
+           dump=0
+           state=present
+ 
+   - name: SWAP ON
+     command: mount -a
+     command: swapon -a
