@@ -1,0 +1,6 @@
+- name: "Installing nb_cl_9.1"
+  hosts: "all"
+  gather_facts: yes
+  remote_user: root
+  roles:
+    - nb_cl_9.1
