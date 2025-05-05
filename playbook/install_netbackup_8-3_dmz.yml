@@ -6,7 +6,7 @@
   vars:
        continue_installation: "y"  # Продолжить установку
        path_scripts: "/tmp/netbackup/"
-       server_name: "bserv3.vimpelcom.ru"  # Имя главного сервера NetBackup
+       server_name: "bserv3"  # Имя главного сервера NetBackup
        token: "DDGSMPBVRDRUGFMF"  # Токен для главного сервера
        option: "2"  # Опция для Java GUI и JRE
        external_file: "./file/bp.conf_8.3"
