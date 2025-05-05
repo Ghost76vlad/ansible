@@ -1,8 +1,8 @@
 continue_installation: "y"  # Продолжить установку
 path_scripts: "/net/beesmc.vimpelcom.ru/store/soft/veritas/netbackup/nb91/NetBackup_9.1.0.1_CLIENTS2/install"
-server_name: "nbserv1.vimpelcom.ru"  # Имя главного сервера NetBackup
+server_name: "nbserv1"  # Имя главного сервера NetBackup
 token: "MJCEDTKLYFWYLLPB"  # Токен для главного сервера
 option: "2"  # Опция для Java GUI и JRE
-secondary_server: "nbserv2.vimpelcom.ru"  # Имя вторичного сервера
+secondary_server: "nbserv2"  # Имя вторичного сервера
 secondary_token: "MRFZGPCGSFKJCVZZ"  # Токен для вторичного сервера
 external_file: "bp.conf_9.1.txt"
